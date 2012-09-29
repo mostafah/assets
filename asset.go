@@ -32,15 +32,15 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"os"
 	"path"
 	"path/filepath"
-	"os"
 	"strings"
 )
 
 var (
 	ErrNoInput = errors.New("assets: no input file given")
-	ErrMix = errors.New("assets: can't mix CSS and JS in one asset")
+	ErrMix     = errors.New("assets: can't mix CSS and JS in one asset")
 )
 
 // type input holds content of each asset source.
@@ -60,15 +60,15 @@ type input struct {
 // Each Asset emits a single .css or .js file. Mixing CSS and JS in one Asset gives an
 // error.
 type Asset struct {
-	filenames []string // names of the input files
-	inputs []input // contents of the input files
-	hashes []string // MD5 hash of each input file
-	bytes []byte // content of output file
-	dir, name string // dir and name of the asset, passed arguments of Put
-	ext string // extension, either ".css" or ".js"
-	fname, oldfname string // name of final file
-	compress bool // does it need compression?
-	join bool // should join CoffeeScript files before compiling?
+	filenames       []string // names of the input files
+	inputs          []input  // contents of the input files
+	hashes          []string // MD5 hash of each input file
+	bytes           []byte   // content of output file
+	dir, name       string   // dir and name of the asset, passed arguments of Put
+	ext             string   // extension, either ".css" or ".js"
+	fname, oldfname string   // name of final file
+	compress        bool     // does it need compression?
+	join            bool     // should join CoffeeScript files before compiling?
 }
 
 // New makes an Asset and adds given filenames to it. You can tweak the returned
@@ -92,31 +92,45 @@ func (a *Asset) Put(dir, name string) (fname string, err error) {
 	a.dir = dir
 	a.name = name
 	// expand globs
-	if err = a.expandGlobs(); err != nil { return }
+	if err = a.expandGlobs(); err != nil {
+		return
+	}
 	// check for zero input files
-	if len(a.filenames) == 0 { return "", ErrNoInput }
+	if len(a.filenames) == 0 {
+		return "", ErrNoInput
+	}
 	// read files into inputs
-	if err = a.readInputs(); err != nil { return }
+	if err = a.readInputs(); err != nil {
+		return
+	}
 	// now we know if asset is either ".css" or ".js"
 	a.ext = a.inputs[0].ext
 	switch a.ext {
-	case ".coffee":	a.ext = ".js"
-	case ".less": a.ext = ".css"
+	case ".coffee":
+		a.ext = ".js"
+	case ".less":
+		a.ext = ".css"
 	}
 	if a.ext != ".css" && a.ext != ".js" {
 		errMsg := "assets: unsupported extension \"" + a.ext + "\""
 		return "", errors.New(errMsg)
 	}
 	// join CoffeeScript files before making any progress
-	if a.join { a.joinCoffee() }
+	if a.join {
+		a.joinCoffee()
+	}
 	// read hashes of inputs
-	if err = a.makeHashes(); err != nil { return }
+	if err = a.makeHashes(); err != nil {
+		return
+	}
 	// read old info and check if anything has changed
 	if changed, err := a.checkSavedInfo(); err != nil || !changed {
 		return a.oldfname, err
 	}
 	// things have changed. delete old files before starting to work
-	if err = a.deleteOld(); err != nil { return }
+	if err = a.deleteOld(); err != nil {
+		return
+	}
 	// compile LESS and CoffeeSCript
 	if err = a.compile(); err != nil {
 		return
@@ -136,26 +150,38 @@ func (a *Asset) Put(dir, name string) (fname string, err error) {
 		switch a.ext {
 		case ".css":
 			a.bytes, err = runCSSCompress(a.bytes)
-			if err != nil { return }
+			if err != nil {
+				return
+			}
 		case ".js":
 			a.bytes, err = runJSCompress(a.bytes)
-			if err != nil { return }
+			if err != nil {
+				return
+			}
 		}
 	}
 	// make filename
 	sum, err := hash(a.bytes)
-	if err != nil { return }
+	if err != nil {
+		return
+	}
 	if len(a.name) > 0 {
 		a.fname = name + "-"
 	}
 	a.fname += sum + a.ext
 	// create output directory if it does not exists
-	if err = os.MkdirAll(dir, 0755); err != nil { return }
+	if err = os.MkdirAll(dir, 0755); err != nil {
+		return
+	}
 	// save to output file
 	err = ioutil.WriteFile(path.Join(dir, a.fname), a.bytes, 0666)
-	if err != nil { return }
+	if err != nil {
+		return
+	}
 	// save asset info files
-	if err = a.saveInfo(); err != nil { return }
+	if err = a.saveInfo(); err != nil {
+		return
+	}
 
 	return a.fname, nil
 }
@@ -188,7 +214,9 @@ func (a *Asset) expandGlobs() error {
 	var l []string
 	for _, filename := range a.filenames {
 		matches, err := filepath.Glob(filename)
-		if err != nil { return err }
+		if err != nil {
+			return err
+		}
 		l = append(l, matches...)
 	}
 	a.filenames = l
@@ -200,7 +228,9 @@ func (a *Asset) readInputs() error {
 	for _, filename := range a.filenames {
 		ext := path.Ext(filename)
 		bytes, err := ioutil.ReadFile(filename)
-		if err != nil { return err }
+		if err != nil {
+			return err
+		}
 		a.inputs = append(a.inputs, input{ext: ext, bytes: bytes})
 	}
 	return nil
@@ -230,13 +260,15 @@ func (a *Asset) joinCoffee() {
 		// n == 0 means the current file is not CoffeeScript
 		// n == 1 means current file is CoffeeScript, but its alone
 		// both of these situations don't need anything to be done
-		if n < 2 { continue }
+		if n < 2 {
+			continue
+		}
 
 		// join all the CoffeeScript files and replace the current one with
 		// this joined file
 		a.inputs[i].bytes = bytes
 		// delete subsequent CoffeScript files
-		a.inputs = append(a.inputs[:i + 1], a.inputs[i + n:]...)
+		a.inputs = append(a.inputs[:i+1], a.inputs[i+n:]...)
 	}
 }
 
@@ -244,7 +276,9 @@ func (a *Asset) joinCoffee() {
 func (a *Asset) makeHashes() error {
 	for _, inp := range a.inputs {
 		sum, err := hash(inp.bytes)
-		if err != nil { return err }
+		if err != nil {
+			return err
+		}
 		a.hashes = append(a.hashes, sum)
 	}
 	return nil
@@ -261,25 +295,35 @@ func (a *Asset) checkSavedInfo() (chnaged bool, err error) {
 		}
 	}
 	lines := strings.Split(string(buf), "\n")
-	if len(lines) < 2 { return true, nil }
+	if len(lines) < 2 {
+		return true, nil
+	}
 	a.oldfname = lines[0]
 	lines = lines[1:]
-	if len(lines) != len(a.hashes) { return true, nil }
+	if len(lines) != len(a.hashes) {
+		return true, nil
+	}
 	for i, line := range lines {
-		if a.hashes[i] != line { return true, nil }
+		if a.hashes[i] != line {
+			return true, nil
+		}
 	}
 	return false, nil
 }
 
 // deleteOld deletes old asset file and asset info file. This is called before
 // generating new file, to keep output directory clean.
-func (a  *Asset) deleteOld() error {
+func (a *Asset) deleteOld() error {
 	if len(a.oldfname) > 0 {
 		err := os.Remove(path.Join(a.dir, a.oldfname))
-		if err != nil && !os.IsNotExist(err) { return err }
+		if err != nil && !os.IsNotExist(err) {
+			return err
+		}
 	}
 	err := os.Remove(path.Join(a.dir, a.infoFname()))
-	if err != nil && !os.IsNotExist(err) { return err }
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
 	return nil
 }
 
@@ -289,12 +333,16 @@ func (a *Asset) compile() error {
 		switch a.inputs[i].ext {
 		case ".less":
 			b, err := runLess(a.inputs[i].bytes)
-			if err != nil { return err }
+			if err != nil {
+				return err
+			}
 			a.inputs[i].bytes = b
 			a.inputs[i].ext = ".css"
 		case ".coffee":
 			b, err := runCoffee(a.inputs[i].bytes)
-			if err != nil { return err }
+			if err != nil {
+				return err
+			}
 			a.inputs[i].bytes = b
 			a.inputs[i].ext = ".js"
 		}
@@ -306,7 +354,9 @@ func (a *Asset) compile() error {
 func (a *Asset) saveInfo() error {
 	output := a.fname + "\n" + strings.Join(a.hashes, "\n")
 	err := ioutil.WriteFile(path.Join(a.dir, a.infoFname()), []byte(output), 0666)
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -321,6 +371,8 @@ func (a *Asset) infoFname() string {
 // hash returns MD5 hash of r.
 func hash(b []byte) (sum string, err error) {
 	h := md5.New()
-	if _, err = h.Write(b); err != nil { return "", err }
+	if _, err = h.Write(b); err != nil {
+		return "", err
+	}
 	return fmt.Sprintf("%x", h.Sum(nil)), nil
 }
