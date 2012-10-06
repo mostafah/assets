@@ -68,7 +68,7 @@ type Asset struct {
 	ext             string   // extension, either ".css" or ".js"
 	fname, oldfname string   // name of final file
 	compress        bool     // does it need compression?
-	join            bool     // should join CoffeeScript files before compiling?
+	join            bool     // should join LESS and CoffeeScript before compiling?
 }
 
 // New makes an Asset and adds given filenames to it. You can tweak the returned
@@ -115,9 +115,9 @@ func (a *Asset) Put(dir, name string) (fname string, err error) {
 		errMsg := "assets: unsupported extension \"" + a.ext + "\""
 		return "", errors.New(errMsg)
 	}
-	// join CoffeeScript files before making any progress
+	// join LESS and CoffeeScript files before making any progress
 	if a.join {
-		a.joinCoffee()
+		a.joinFiles()
 	}
 	// read hashes of inputs
 	if err = a.makeHashes(); err != nil {
@@ -192,12 +192,11 @@ func (a *Asset) SetCompress(compress bool) {
 	a.compress = compress
 }
 
-// SetJoin can change behaviour of Asset in handling multiple CoffeeScript files.
-// By default, if multiple .coffee files are provided, Asset joins them into a single
-// one before compiling them into JavaScript. This is useful for large CoffeeScript
-// applications which include multiple files, but should not be separated by
-// CoffeeScript's top-level wrapper function. You can disable this behavior by calling
-// SetJoin with false value.
+// SetJoin can change behaviour of Asset in handling multiple LESS and CoffeeScript
+// files. By default, if multiple .less or mulitple .coffee files are provided, Asset
+// joins them into a single one before compiling them into CSS and JavaScript. This is
+// useful for separating LESS and CoffeeScript code into multiple files. You can
+// disable this behavior by setting Join to false.
 //
 // Please note that Asset should preserve order of input files, so if you provide it
 // with
@@ -236,38 +235,48 @@ func (a *Asset) readInputs() error {
 	return nil
 }
 
-// joinCoffee joins subsequent CoffeeScript inputs into single ones.
+// joinFiles joins subsequent LESS or CoffeeScript inputs into single ones.
 //
-// To preserve of the input files, only sequential CoffeScript files are joined as a
-// group. That means that if we have, for example, files "a.coffee", "b.js",
-// "c.coffee", and "d.coffee", only third and fourth files are joined.
-func (a *Asset) joinCoffee() {
+// To preserve of the input files, only sequential LESS or CoffeScript files are
+// joined as a group. That means that if we have, for example, files "a.coffee",
+// "b.js", "c.coffee", and "d.coffee", only third and fourth files are joined.
+func (a *Asset) joinFiles() {
+	if len(a.inputs) == 0 {
+		return
+	}
+	// LESS or CoffeeScript?
+	ext := ""
+	switch a.inputs[0].ext {
+	case ".js", ".coffee":
+		ext = ".coffee"
+	case ".css", ".less":
+		ext = ".less"
+	}
 	// can't use range because the list will be changed during the loop
 	for i := 0; i < len(a.inputs); i++ {
-		// a keeps content of current group of CoffeScript files, starting
+		// a keeps content of current group of joinable files, starting
 		// from file at a.inputs[i]
 		bytes := make([]byte, 0)
 		n := 0
 		for j := i; j < len(a.inputs); j++ {
-			if a.inputs[j].ext == ".coffee" {
+			if a.inputs[j].ext == ext {
 				bytes = append(bytes, a.inputs[j].bytes...)
 				n++
 			} else {
-				// first non-CoffeeScript file ends the sequence
+				// first non-joinable file ends the sequence
 				break
 			}
 		}
-		// n == 0 means the current file is not CoffeeScript
-		// n == 1 means current file is CoffeeScript, but its alone
+		// n == 0 means the current file is not joinable
+		// n == 1 means current file is joinable, but its alone
 		// both of these situations don't need anything to be done
 		if n < 2 {
 			continue
 		}
 
-		// join all the CoffeeScript files and replace the current one with
-		// this joined file
+		// join all the files
 		a.inputs[i].bytes = bytes
-		// delete subsequent CoffeScript files
+		// delete subsequent joined files
 		a.inputs = append(a.inputs[:i+1], a.inputs[i+n:]...)
 	}
 }

@@ -24,7 +24,7 @@ func runJSCompress(in []byte) (out []byte, err error) {
 func runCmd(in []byte, cmd string, args ...string) (out []byte, err error) {
 	stdout, stderr, err := run.Run(in, cmd, args...)
 	if len(stderr) != 0 {
-		return nil, errors.New("stderr:" + string(stderr))
+		return nil, errors.New("stderr: " + string(stderr))
 	} else if err != nil {
 		return nil, err
 	}
